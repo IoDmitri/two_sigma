@@ -1,6 +1,9 @@
+import itertools
 import os
 import sys
 
+from imblearn.under_sampling import RandomUnderSampler
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -15,13 +18,13 @@ test = pd.read_json("test.json")
 params = {}
 params["objective"] = "multi:softprob"
 params["eta"] = 0.4
-params["max_depth"] = 10
+params["max_depth"] = 5
 params["num_class"] = 3
 params["eval_metric"] = "mlogloss"
-#params['colsample_bytree'] = 0.7
+params['colsample_bytree'] = 0.7
 params["silent"] = 1
 params["min_child_weight"] =5 
-num_rounds = 10
+num_rounds = 20
 max_words=50
 
 plist = list(params.items())
@@ -64,6 +67,40 @@ def generate_dataset(data, count_vectorizer, cv=False):
 	x = x[columns_to_use]
 	return x, y
 
+def plot_confusion_matrix(cm, classes,
+                          normalize=False,
+                          title='Confusion matrix',
+                          cmap=plt.cm.Blues):
+    """
+    **lifted from http://scikit-learn.org/stable/auto_examples/model_selection/plot_confusion_matrix.html **
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, cm[i, j],
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
 def make_model(cv=False):
 	vect = CountVectorizer(max_features=max_words, stop_words=["to"], ngram_range=(1,3))
 	vect.fit(np.hstack(data["features"].values))
@@ -84,16 +121,23 @@ def make_model(cv=False):
 	del x_train["listing_id"]
 	del x_test["listing_id"]
 
-	model = train_xgb_classifier(x_train, y_train)
+	rus = RandomUnderSampler()
+	x_resample, y_resample = rus.fit_sample(x_train, y_train)
 
-	preds = model.predict(xgb.DMatrix(x_test))
+	model = train_xgb_classifier(x_resample, y_resample)
+
+	preds = model.predict(xgb.DMatrix(x_test.values))
 	pred_df = pd.DataFrame(preds)
 	pred_df.columns = ["high", "medium", "low"]
 	pred_df["listing_id"] = listing_id_vals
 
 	if cv:
-		#print accuracy_score(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
-		print confusion_matrix(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
+		print "Accuracy Score"
+		print accuracy_score(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
+		print "Confusion Matrix"
+		cm = confusion_matrix(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
+		plot_confusion_matrix(cm, ["high", "medium", "low"], True)
+		plt.show()
 	else:
 		f_name = "prediction.csv"
 		if os.path.exists(f_name):
