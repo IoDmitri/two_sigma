@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import confusion_matrix
 import xgboost as xgb
 
 data = pd.read_json("train.json")
@@ -13,13 +14,14 @@ test = pd.read_json("test.json")
 
 params = {}
 params["objective"] = "multi:softprob"
-params["eta"] = 0.3
-params["max_depth"] = 11
+params["eta"] = 0.4
+params["max_depth"] = 10
 params["num_class"] = 3
 params["eval_metric"] = "mlogloss"
-params["colsample"] = 0.7
+#params['colsample_bytree'] = 0.7
 params["silent"] = 1
-num_rounds = 50
+params["min_child_weight"] =5 
+num_rounds = 10
 max_words=50
 
 plist = list(params.items())
@@ -37,7 +39,7 @@ def train_xgb_classifier(x_train, y_train, x_test = None, y_test=None):
 	if y_test is not None:
 		d_valid = xgb.DMatrix(x_test, y_test)
 		e_list.append((d_valid, "eval"))
-		return xgb.train(plist, d_train, num_rounds, e_list)
+		return xgb.train(plist, d_train, num_rounds, e_list, weight)
 	else:
 		return xgb.train(plist, d_train, num_rounds, e_list)
 
@@ -46,17 +48,12 @@ def generate_dataset(data, count_vectorizer, cv=False):
 	w_counts = data["features"].map(lambda x : count_vectorizer.transform(x).toarray().sum(axis=0))
 	w_counts_df = pd.DataFrame([x.tolist() for x in w_counts], columns=count_vectorizer.get_feature_names(), index=data.index.values)
 	x = pd.concat([data, w_counts_df], axis=1)
-	data["created"] = pd.to_datetime(data["created"])
-
-	x["year"] = data["created"].dt.year
-	x["month"] = data["created"].dt.month
-	x["day"] = data["created"].dt.day
-	x["hour"] = data["created"].dt.hour
-
-	columns_to_use.extend(["year", "month", "day", "hour"])
-
-	y = None
 	columns_to_use.extend(count_vectorizer.get_feature_names())
+	#x = data
+
+	x["has_building_id"] = data["building_id"].map(lambda x: 1 if x == "0" else 0)
+	columns_to_use.extend(["has_building_id"])
+	y = None
 
 	if cv:
 		return train_test_split(x[columns_to_use], x["interest_level"].map(lambda x : assign_class(x)), random_state=5)
@@ -95,7 +92,8 @@ def make_model(cv=False):
 	pred_df["listing_id"] = listing_id_vals
 
 	if cv:
-		print accuracy_score(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
+		#print accuracy_score(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
+		print confusion_matrix(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
 	else:
 		f_name = "prediction.csv"
 		if os.path.exists(f_name):
