@@ -1,4 +1,5 @@
 import itertools
+import operator
 import os
 import sys
 
@@ -13,24 +14,41 @@ from sklearn.metrics import confusion_matrix
 import xgboost as xgb
 
 data = pd.read_json("train.json")
+#down sample the lows
+low = data[data["interest_level"] == "low"].sample(20000)
+data = data.drop(low.index)
 test = pd.read_json("test.json")
 
 params = {}
 params["objective"] = "multi:softprob"
 params["eta"] = 0.4
-params["max_depth"] = 5
+params["max_depth"] = 15
 params["num_class"] = 3
 params["eval_metric"] = "mlogloss"
 params['colsample_bytree'] = 0.7
 params["silent"] = 1
-params["min_child_weight"] =5 
-num_rounds = 20
+params["min_child_weight"] = 5
+num_rounds = 10
 max_words=50
 
 plist = list(params.items())
 
 def assign_class(cls):
 	return ["high", "medium", "low"].index(cls)
+
+# def custom_eval(preds, dtrain):
+# 	label = dtrain.get_label()
+# 	weight = dtrain.get_weight()
+# 	weight = weight * float(test_size) / len(label)#refactorize with 55k test sample for CV
+# 	s = sum( weight[i] for i in range(len(label)) if label[i] == 1.0 )
+# 	b = sum( weight[i] for i in range(len(label)) if label[i] == 0.0 )
+# 	ams = AMS(s,b)
+# 	ds=(np.log(s/(b+10.)+1))/ams;
+# 	db=(((b+10)*np.log(s/(b+10.)+1)-s)/(b+10.))/ams;
+# 	preds = 1.0 / (1.0 + np.exp(-preds))#sigmod it
+# 	grad = ds*(preds-label)+db*(1-(preds-label))
+# 	hess = np.ones(preds.shape)/300. #constant
+# 	return grad, hess
 
 def count_features(features):
 	return map(lambda s: s.lower().replace("-", "").replace("!", ""), features)
@@ -42,7 +60,7 @@ def train_xgb_classifier(x_train, y_train, x_test = None, y_test=None):
 	if y_test is not None:
 		d_valid = xgb.DMatrix(x_test, y_test)
 		e_list.append((d_valid, "eval"))
-		return xgb.train(plist, d_train, num_rounds, e_list, weight)
+		return xgb.train(plist, d_train, num_rounds, e_list)
 	else:
 		return xgb.train(plist, d_train, num_rounds, e_list)
 
@@ -85,6 +103,7 @@ def plot_confusion_matrix(cm, classes,
 
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        cm = cm.round(2) 
         print("Normalized confusion matrix")
     else:
         print('Confusion matrix, without normalization')
@@ -121,23 +140,24 @@ def make_model(cv=False):
 	del x_train["listing_id"]
 	del x_test["listing_id"]
 
-	rus = RandomUnderSampler()
-	x_resample, y_resample = rus.fit_sample(x_train, y_train)
+	# rus = RandomUnderSampler()
+	# x_resample, y_resample = rus.fit_sample(x_train, y_train)
 
-	model = train_xgb_classifier(x_resample, y_resample)
+	model = train_xgb_classifier(x_train, y_train)
 
-	preds = model.predict(xgb.DMatrix(x_test.values))
+	preds = model.predict(xgb.DMatrix(x_test))
 	pred_df = pd.DataFrame(preds)
 	pred_df.columns = ["high", "medium", "low"]
 	pred_df["listing_id"] = listing_id_vals
 
 	if cv:
-		print "Accuracy Score"
-		print accuracy_score(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
-		print "Confusion Matrix"
-		cm = confusion_matrix(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
-		plot_confusion_matrix(cm, ["high", "medium", "low"], True)
-		plt.show()
+		# print "Accuracy Score"
+		# print accuracy_score(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
+		# cm = confusion_matrix(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
+		# plot_confusion_matrix(cm, ["high", "medium", "low"], True)
+		s = sorted(model.get_fscore().items(),  key=operator.itemgetter(1), reverse=True)
+		print s
+		#plt.show()
 	else:
 		f_name = "prediction.csv"
 		if os.path.exists(f_name):
