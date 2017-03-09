@@ -23,14 +23,14 @@ test = pd.read_json("test.json")
 params = {}
 params["objective"] = "multi:softprob"
 params["eta"] = 0.4
-#params["lambda"] = 2
-params["max_depth"] = 30
+params["lambda"] = 2
+params["max_depth"] = 15
 params["num_class"] = 3
 params["eval_metric"] = "mlogloss"
 #params['colsample_bytree'] = 0.7
 params["silent"] = 1
-params["min_child_weight"] = 5
-num_rounds = 10
+params["min_child_weight"] = 10
+num_rounds = 50
 max_words=50
 early_stop = 10
 
@@ -64,17 +64,19 @@ def train_xgb_classifier(x_train, y_train, x_test = None, y_test=None):
 	else:
 		return xgb.train(plist, d_train, num_rounds, e_list, early_stopping_rounds=early_stop)
 	
-def generate_dataset(data, count_vectorizer, man_ids_vect, cv=False, dummy=None):
+def generate_dataset(data, count_vectorizer, man_ids_vect, build_id_vect, cv=False, dummy=None):
 	columns_to_use = ["bathrooms", "bedrooms", "latitude", "longitude", "price", "listing_id"]
 	w_counts = data["features"].map(lambda x : count_vectorizer.transform(x).toarray().sum(axis=0))
 	w_counts_df = pd.DataFrame([x.tolist() for x in w_counts], columns=count_vectorizer.get_feature_names(), index=data.index.values)
 	x = pd.concat([data, w_counts_df], axis=1)
 	columns_to_use.extend(count_vectorizer.get_feature_names())
 	columns_to_use.extend(man_ids_vect.get_feature_names())
+	columns_to_use.extend(build_id_vect.get_feature_names())
 
 	x["has_building_id"] = data["building_id"].map(lambda x: 1 if x == "0" else 0)
 	columns_to_use.extend(["has_building_id"])
 	man_ids_vect.transform(x)
+	build_id_vect.transform(x)
 	x = x[columns_to_use]
 
 	if dummy:
@@ -130,7 +132,9 @@ def make_model(data, test, cv=False):
 	c_vect = CountVectorizer(max_features=max_words, stop_words=["to"], ngram_range=(1,3))
 	c_vect.fit(np.hstack(merged["features"].values))
 	man_ids = IdVectorizer("manager_id")
-	man_ids.fit(data, test)
+	man_ids.fit(data, test, transform_interest=True)
+	build_id_vect = IdVectorizer("building_id")
+	build_id_vect.fit(data, test)
 
 	x_train = None
 	y_train = None
@@ -138,10 +142,10 @@ def make_model(data, test, cv=False):
 	y_test = None
 
 	if cv:
-		x_train, x_test, y_train, y_test = generate_dataset(data, c_vect, man_ids, cv=True)
+		x_train, x_test, y_train, y_test = generate_dataset(data, c_vect, man_ids, build_id_vect, cv=True)
 	else:
-		x_train, y_train = generate_dataset(data, c_vect, man_ids)
-		x_test, _ = generate_dataset(test, c_vect, man_ids)
+		x_train, y_train = generate_dataset(data, c_vect, man_ids, build_id_vect)
+		x_test, _ = generate_dataset(test, c_vect, man_ids, transform_interest)
 
 	listing_id_vals = x_test["listing_id"].values
 
