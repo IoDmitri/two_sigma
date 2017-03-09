@@ -22,15 +22,15 @@ test = pd.read_json("test.json")
 
 params = {}
 params["objective"] = "multi:softprob"
-params["eta"] = 0.4
-params["lambda"] = 2
-params["max_depth"] = 15
+params["eta"] = 0.6
+params["lambda"] = 3
+params["max_depth"] = 25
 params["num_class"] = 3
 params["eval_metric"] = "mlogloss"
 #params['colsample_bytree'] = 0.7
 params["silent"] = 1
 params["min_child_weight"] = 10
-num_rounds = 50
+num_rounds = 20
 max_words=50
 early_stop = 10
 
@@ -145,7 +145,7 @@ def make_model(data, test, cv=False):
 		x_train, x_test, y_train, y_test = generate_dataset(data, c_vect, man_ids, build_id_vect, cv=True)
 	else:
 		x_train, y_train = generate_dataset(data, c_vect, man_ids, build_id_vect)
-		x_test, _ = generate_dataset(test, c_vect, man_ids, transform_interest)
+		x_test, _ = generate_dataset(test, c_vect, man_ids, build_id_vect)
 
 	listing_id_vals = x_test["listing_id"].values
 
