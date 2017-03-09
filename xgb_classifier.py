@@ -21,15 +21,15 @@ test["in_test"] = 1
 
 params = {}
 params["objective"] = "multi:softprob"
-params["eta"] = 0.45
-params["lambda"] = 2
-params["max_depth"] = 10
+params["eta"] = 0.4
+#params["lambda"] = 2
+params["max_depth"] = 30
 params["num_class"] = 3
 params["eval_metric"] = "mlogloss"
-params['colsample_bytree'] = 0.7
+#params['colsample_bytree'] = 0.7
 params["silent"] = 1
 params["min_child_weight"] = 5
-num_rounds = 40
+num_rounds = 10
 max_words=50
 early_stop = 10
 unk = "unk"
@@ -61,7 +61,7 @@ def train_xgb_classifier(x_train, y_train, x_test = None, y_test=None):
 	d_train = xgb.DMatrix(x_train, label=y_train, missing=-0.999)
 	e_list = [(d_train, "train")]
 	if y_test is not None:
-		d_valid = xgb.DMatrix(x_test.values, label=y_test.values)
+		d_valid = xgb.DMatrix(x_test, label=y_test)
 		e_list.extend([(d_valid, "eval")])
 		return xgb.train(plist, d_train, num_rounds, e_list, early_stopping_rounds=early_stop)
 	else:
@@ -75,7 +75,6 @@ def gen_manids(merged, data):
 	# manager_ids = manager_ids.sort_values(by="total")
 	# encoder = LabelEncoder()
 	# encoder.fit(np.append(manager_ids[manager_ids["total"] >= 20].index.values, unk))
-	# return encoder
 	ids_to_use = set(manager_ids[manager_ids["total"] >= 20].index.values)
 	data["interest_level"] = data["interest_level"].map(lambda x : assign_class(x))
 	interest_by_id = data.groupby("manager_id")["interest_level"].mean().to_dict()
@@ -84,7 +83,7 @@ def gen_manids(merged, data):
 		if k in ids_to_use:
 			dict_to_return[k] = v
 
-	return dict_to_return
+	return dict_to_return #, encoder
 
 def avg_for_man_id(manid, manid_dict):
 	if manid in manid_dict:
@@ -154,7 +153,6 @@ def plot_confusion_matrix(cm, classes,
 def make_model(data, test, cv=False):
 	merged = pd.concat([data, test])
 	c_vect = CountVectorizer(max_features=max_words, stop_words=["to"], ngram_range=(1,3))
-	# vect.fit(np.hstack(data["features"].values))
 	c_vect.fit(np.hstack(merged["features"].values))
 	man_ids = gen_manids(merged, data)
 
@@ -179,12 +177,12 @@ def make_model(data, test, cv=False):
 	del x_test["listing_id"]
 	del merged
 
-	ros= RandomOverSampler()
-	x_r, y_r = ros.fit_sample(x_train, y_train)
+	# ros= RandomOverSampler()
+	# x_r, y_r = ros.fit_sample(x_train, y_train)
 
 
-	model = train_xgb_classifier(x_r, y_r, x_test, y_test)
-	preds = model.predict(xgb.DMatrix(x_test.values, missing=-0.999))
+	model = train_xgb_classifier(x_train, y_train, x_test, y_test)
+	preds = model.predict(xgb.DMatrix(x_test, missing=-0.999))
 	pred_df = pd.DataFrame(preds)
 	pred_df.columns = ["high", "medium", "low"]
 	pred_df["listing_id"] = listing_id_vals
@@ -194,8 +192,8 @@ def make_model(data, test, cv=False):
 		print accuracy_score(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
 		cm = confusion_matrix(y_test, map(lambda x: np.argmax(x), pred_df[["high", "medium", "low"]].values))
 		plot_confusion_matrix(cm, ["high", "medium", "low"], True)
-		# s = sorted(model.get_fscore().items(),  key=operator.itemgetter(1), reverse=True)
-		# print s
+		s = sorted(model.get_fscore().items(),  key=operator.itemgetter(1), reverse=True)
+		print s
 		plt.show()
 	else:
 		f_name = "prediction.csv"
