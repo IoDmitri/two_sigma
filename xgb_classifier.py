@@ -14,10 +14,11 @@ from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import LabelEncoder
 import xgboost as xgb
 
+from data_utils import *
+from IdVectorizer import IdVectorizer
+
 data = pd.read_json("train.json")
-data["in_train"] = 1
 test = pd.read_json("test.json")
-test["in_test"] = 1
 
 params = {}
 params["objective"] = "multi:softprob"
@@ -32,12 +33,8 @@ params["min_child_weight"] = 5
 num_rounds = 10
 max_words=50
 early_stop = 10
-unk = "unk"
 
 plist = list(params.items())
-
-def assign_class(cls):
-	return ["high", "medium", "low"].index(cls)
 
 # def custom_eval(preds, dtrain):
 # 	label = dtrain.get_label()
@@ -66,44 +63,22 @@ def train_xgb_classifier(x_train, y_train, x_test = None, y_test=None):
 		return xgb.train(plist, d_train, num_rounds, e_list, early_stopping_rounds=early_stop)
 	else:
 		return xgb.train(plist, d_train, num_rounds, e_list, early_stopping_rounds=early_stop)
-
-def gen_manids(merged, data):
-	merged[["in_train", "in_test"]] = merged[["in_train", "in_test"]].fillna(0)
-	manager_ids = merged.groupby("manager_id")[["in_train", "in_test"]].sum()
-	manager_ids = manager_ids[manager_ids["in_train"] != 0]
-	manager_ids["total"] = manager_ids["in_train"] + manager_ids["in_test"]
-	# manager_ids = manager_ids.sort_values(by="total")
-	# encoder = LabelEncoder()
-	# encoder.fit(np.append(manager_ids[manager_ids["total"] >= 20].index.values, unk))
-	ids_to_use = set(manager_ids[manager_ids["total"] >= 20].index.values)
-	data["interest_level"] = data["interest_level"].map(lambda x : assign_class(x))
-	interest_by_id = data.groupby("manager_id")["interest_level"].mean().to_dict()
-	dict_to_return = {}
-	for k, v in interest_by_id.iteritems():
-		if k in ids_to_use:
-			dict_to_return[k] = v
-
-	return dict_to_return #, encoder
-
-def avg_for_man_id(manid, manid_dict):
-	if manid in manid_dict:
-		return manid_dict[manid]
-	return -1.0
 	
-def generate_dataset(data, count_vectorizer, man_ids, cv=False):
-	columns_to_use = ["bathrooms", "bedrooms", "latitude", "longitude", "price", "listing_id", "manager_id"]
+def generate_dataset(data, count_vectorizer, man_ids_vect, cv=False, dummy=None):
+	columns_to_use = ["bathrooms", "bedrooms", "latitude", "longitude", "price", "listing_id"]
 	w_counts = data["features"].map(lambda x : count_vectorizer.transform(x).toarray().sum(axis=0))
 	w_counts_df = pd.DataFrame([x.tolist() for x in w_counts], columns=count_vectorizer.get_feature_names(), index=data.index.values)
 	x = pd.concat([data, w_counts_df], axis=1)
 	columns_to_use.extend(count_vectorizer.get_feature_names())
-	#x = data
+	columns_to_use.extend(man_ids_vect.get_feature_names())
 
 	x["has_building_id"] = data["building_id"].map(lambda x: 1 if x == "0" else 0)
 	columns_to_use.extend(["has_building_id"])
-
-	x["manager_id"] = x["manager_id"].map(lambda x: avg_for_man_id(x, man_ids))
+	man_ids_vect.transform(x)
 	x = x[columns_to_use]
-	#x = pd.get_dummies(x, columns=["manager_id"])
+
+	if dummy:
+		x = pd.get_dummies(x, columns=dummy)
 
 	y = None
 
@@ -154,11 +129,8 @@ def make_model(data, test, cv=False):
 	merged = pd.concat([data, test])
 	c_vect = CountVectorizer(max_features=max_words, stop_words=["to"], ngram_range=(1,3))
 	c_vect.fit(np.hstack(merged["features"].values))
-	man_ids = gen_manids(merged, data)
-
-	#down sample the lows
-	# low = data[data["interest_level"] == "low"].sample(20000)
-	# data = data.drop(low.index)
+	man_ids = IdVectorizer("manager_id")
+	man_ids.fit(data, test)
 
 	x_train = None
 	y_train = None
