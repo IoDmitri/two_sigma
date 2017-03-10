@@ -22,16 +22,17 @@ test = pd.read_json("test.json")
 
 params = {}
 params["objective"] = "multi:softprob"
-params["eta"] = 0.6
-params["lambda"] = 3
-params["max_depth"] = 25
+params["eta"] = 0.4
+params["lambda"] = 0.3
+params["max_depth"] = 35
+params["max_delta_step"] = 5
 params["num_class"] = 3
 params["eval_metric"] = "mlogloss"
 #params['colsample_bytree'] = 0.7
 params["silent"] = 1
 params["min_child_weight"] = 10
-num_rounds = 20
-max_words=50
+num_rounds = 15
+max_words=20
 early_stop = 10
 
 plist = list(params.items())
@@ -141,21 +142,18 @@ def make_model(data, test, cv=False):
 	x_test = None
 	y_test = None
 
+	dummy = ["manager_id", "building_id"]
 	if cv:
-		x_train, x_test, y_train, y_test = generate_dataset(data, c_vect, man_ids, build_id_vect, cv=True)
+		x_train, x_test, y_train, y_test = generate_dataset(data, c_vect, man_ids, build_id_vect, cv=True, dummy= dummy)
 	else:
-		x_train, y_train = generate_dataset(data, c_vect, man_ids, build_id_vect)
-		x_test, _ = generate_dataset(test, c_vect, man_ids, build_id_vect)
+		x_train, y_train = generate_dataset(data, c_vect, man_ids, build_id_vect, dummy= dummy)
+		x_test, _ = generate_dataset(test, c_vect, man_ids, build_id_vect, dummy= dummy)
 
 	listing_id_vals = x_test["listing_id"].values
 
 	del x_train["listing_id"]
 	del x_test["listing_id"]
 	del merged
-
-	# ros= RandomOverSampler()
-	# x_r, y_r = ros.fit_sample(x_train, y_train)
-
 
 	model = train_xgb_classifier(x_train, y_train, x_test, y_test)
 	preds = model.predict(xgb.DMatrix(x_test, missing=-0.999))
