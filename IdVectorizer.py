@@ -15,7 +15,7 @@ class IdVectorizer(object):
 	def get_feature_names(self):
 		return [self.id_, self.id_+"avg"]
 
-	def fit(self, train, test, thresh=20, transform_interest=False):
+	def fit(self, train, test, thresh=10, transform_interest=False):
 		train["in_train"] = 1
 		test["in_test"] = 1
 		merged = pd.concat([train, test])
