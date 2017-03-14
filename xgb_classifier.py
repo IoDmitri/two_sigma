@@ -110,18 +110,22 @@ def make_model(data, test, cv=False):
 	y_test = None
 
 	dummy = ["manager_id", "building_id"]
-	if cv:
-		x_train, x_test, y_train, y_test = generate_dataset(data, f_c_vect, d_vect, man_ids, build_id_vect, cv=True)
-	else:
-		x_train, y_train = generate_dataset(data, f_c_vect, d_vect, man_ids, build_id_vect)
-
-	listing_id_vals = x_test["listing_id"].values
+	
+	x_train, x_test, y_train, y_test = generate_dataset(data, f_c_vect, d_vect, man_ids, build_id_vect, cv=True)
 
 	del x_train["listing_id"]
+	listing_id_vals = x_test["listing_id"].values
 	del x_test["listing_id"]
 	del merged
 
 	model = train_xgb_classifier(x_train, y_train, x_test, y_test)
+
+	if not cv:
+		x_test, _ = generate_dataset(test, f_c_vect, d_vect, man_ids, build_id_vect)
+		listing_id_vals = x_test["listing_id"].values
+		del x_test["listing_id"]
+
+
 	preds = model.predict(xgb.DMatrix(x_test, missing=-0.999))
 	pred_df = pd.DataFrame(preds)
 	pred_df.columns = ["high", "medium", "low"]
