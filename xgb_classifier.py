@@ -21,7 +21,7 @@ test = pd.read_json("test.json")
 
 params = {}
 params["objective"] = "multi:softprob"
-params["eta"] = 0.6
+params["eta"] = 0.4
 params["lambda"] = 0.3
 params["max_depth"] = 35
 params["max_delta_step"] = 5
@@ -67,9 +67,6 @@ def generate_dataset(data, count_vectorizer, disc_count_vectorizer, man_ids_vect
 	x["photo_counts"] = x["photos"].map(lambda x: len(x))
 	x["created"] = pd.to_datetime(x["created"])
 	x["created_day"] = x["created"].dt.day
-	
-	x["has_building_id"] = data["building_id"].map(lambda x: 1 if x == "0" else 0)
-	columns_to_use.extend(["has_building_id"])
 
 	man_ids_vect.transform(x)
 	columns_to_use.extend(man_ids_vect.get_feature_names())
