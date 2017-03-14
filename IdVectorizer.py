@@ -11,6 +11,7 @@ class IdVectorizer(object):
 		self.unk = unk
 		self.id_ = id_
 		self._trained = False
+		self._mean = None
 
 	def get_feature_names(self):
 		return [self.id_, self.id_+"avg"]
@@ -28,6 +29,7 @@ class IdVectorizer(object):
 		ids_to_use = set(self._encoder.classes_)
 		if transform_interest:
 			train["interest_level"] = train["interest_level"].map(lambda x : assign_class(x))
+		self._mean = train["interest_level"].mean()
 		interest_by_id = train.groupby(self.id_)["interest_level"].mean().to_dict()
 		
 		for k, v in interest_by_id.iteritems():
@@ -46,6 +48,6 @@ class IdVectorizer(object):
 		if self._trained:
 			if id_ in self._dict:
 				return self._dict[id_]
-			return -1.0
+			return self._mean
 		else:
 			raise ValueError("Vectorizer has not been fitted")

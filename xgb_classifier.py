@@ -105,10 +105,8 @@ def make_model(data, test, cv=False):
 	y_train = None
 	x_test = None
 	y_test = None
-
-	dummy = ["manager_id", "building_id"]
 	
-	x_train, x_test, y_train, y_test = generate_dataset(data, f_c_vect, d_vect, man_ids, build_id_vect, cv=True)
+	x_train, x_test, y_train, y_test = generate_dataset(data,f_c_vect, d_vect, man_ids, build_id_vect, cv=True)
 
 	del x_train["listing_id"]
 	listing_id_vals = x_test["listing_id"].values
